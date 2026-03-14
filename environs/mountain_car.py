@@ -4,38 +4,35 @@ import numpy as np
 from neuro_gym.environ import Environ, Complexity
 
 
-class LunarLander(Environ):
+class MountainCar(Environ):
     
     @property
     def id(self) -> str:
-        return 'BipedalWalker-v3'
+        return 'MountainCar-v0'
     
     @property
     def name(self) -> str:
-        return 'Двуногий шагающий робот'
+        return 'Горный автомобиль'
     
     @property
     def params(self) -> Dict:
-        return {
-            'id': self.id,
-            'hardcore': False
-        }
+        return {'id': self.id}
     
     @property
     def complexity(self) -> int:
-        return Complexity.MEDIUM
+        return Complexity.LOW
     
     @property
     def number_input_neurons(self) -> int: 
-        return 24
+        return 2
     
     @property
     def number_output_neurons(self) -> int: 
-        return 4
+        return 3
     
     @property
     def calc_confidence(self) -> bool: 
-        return False
+        return True
     
-    def update_vector(self, output_vector: Union[np.ndarray, torch.Tensor]) -> np.ndarray:
-        return torch.tanh(output_vector).numpy()
+    def update_vector(self, output_vector: Union[np.ndarray, torch.Tensor]) -> int:
+        return torch.argmax(output_vector, dim=-1).item()

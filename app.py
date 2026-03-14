@@ -85,7 +85,12 @@ class NeuroGym(object):
                         print('\nНейроэволюция завершена.', end='\n\n')
                         print('Выберите модель для сохранения.')
                         self._plot_evolution()
-                        self._select_save_model()
+                        is_select = self._input_user_number(
+                            'Выбрать другую модель для сохранения? 0 - Нет. 1 - Да: ',
+                            0, 1
+                        )
+                        if is_select:
+                            self._select_save_model()
                     elif user_action == 2:
                         self._plot_evolution()
                     elif user_action == 3:
@@ -254,9 +259,11 @@ class NeuroGym(object):
             with self._env as env_gym:
                 gen_alg = GeneticEvolution(self._model, env_gym, self._env)
                 gen_alg.create_new_population()
+                gen_alg.load_population()
                 gen_alg.load_best_population()
                 gen_alg.evaluate()
                 gen_alg.save_best_individuals()
+                gen_alg.save_individuals()
                 for i in gen_alg.best_individuals():
                     self._model.set_weights_from_vector(i)
                     break

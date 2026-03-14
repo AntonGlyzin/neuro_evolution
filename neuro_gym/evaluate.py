@@ -45,6 +45,7 @@ class GeneticEvolution:
         self._hof = tools.HallOfFame(self.HALL_OF_FAME_SIZE)
         self._toolbox = base.Toolbox()
         self._path_best_individs = individ.statistic_folder / 'best_individs.npy'
+        self._path_individs = individ.statistic_folder / 'individs.npy'
         
         if not hasattr(creator, "FitnessMax"):
             creator.create("FitnessMax", base.Fitness, weights=(1.0,))
@@ -110,6 +111,20 @@ class GeneticEvolution:
     def save_best_individuals(self):
         """ Сохранение лучших особей. """
         np.save(self._path_best_individs, np.array(self._hof.items))
+    
+    def save_individuals(self):
+        """ Сохранение особей. """
+        np.save(self._path_individs, np.array(self._population[:]))
+    
+    def load_population(self):
+        """ Загружает особей в популяцию. """
+        items = []
+        if self._path_individs.exists():
+            items = np.load(self._path_individs).tolist()
+        for i, _ in enumerate(items):
+            ind = self._toolbox.individual_creator()
+            ind[:] = items[i][:]
+            self._population[i] = ind
     
     def load_best_population(self):
         """ Загружает лучших особей в популяцию. """

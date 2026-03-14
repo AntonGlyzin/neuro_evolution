@@ -20,14 +20,14 @@ class LunarLander(Environ):
             'id': self.id,
             'continuous': False, 
             'gravity': -10.0, # 0 до -12.0
-            'enable_wind': True,  # случайным образом в диапазоне от -9999 до 9999
-            'wind_power': 20.0,  #  от 0 до 20.0
-            'turbulence_power': 2.0 #  от 0 до 2.0
+            'enable_wind': False,  # случайным образом в диапазоне от -9999 до 9999
+            'wind_power': 15.0,  #  от 0 до 20.0
+            'turbulence_power': 1.5 #  от 0 до 2.0
         }
     
     @property
     def complexity(self) -> int:
-        return Complexity.LOW
+        return Complexity.MEDIUM
     
     @property
     def number_input_neurons(self) -> int: 
