@@ -1,0 +1,118 @@
+name: Build executables for Windows
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:        # Возможность ручного запуска
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    outputs:
+      version_app: ${{ steps.version.outputs.VERSION_APP }}
+    strategy:
+      matrix:
+        os: [windows-latest]
+        python-version: ['3.11']   # Можно выбрать одну версию
+      fail-fast: false       # Продолжать сборку на других ОС, даже если одна упала
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate New version
+        id: version
+        run: |
+          FIX=$(git log --oneline --grep="fix:" | wc -l)
+          FEAT=$(git log --oneline --grep="feat:" | wc -l)
+          echo "VERSION_APP=1.${FEAT}.${FIX}" >> $GITHUB_OUTPUT
+          echo "VERSION_APP=1.${FEAT}.${FIX}" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          architecture: 'x64'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          # Устанавливаем зависимости из requirements.txt
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        shell: bash
+      
+      - name: Install UPX on Windows
+        if: matrix.os == 'windows-latest'
+        run: |
+          choco install upx
+        shell: powershell
+
+      - name: Build with PyInstaller (using spec file)
+        run: |
+          pyinstaller neuro_gym.spec
+        shell: bash
+
+      - name: Rename executable for artifact
+        run: |
+          mkdir -p artifacts
+          # Копируем settings.py, если он существует
+            if [ -f settings.py ]; then
+            cp settings.py artifacts/
+            fi
+            # Копируем папку environs, если она существует
+            if [ -d environs ]; then
+            mkdir -p artifacts/environs
+            cp -r environs/* artifacts/environs/
+            fi
+          if [ "${{ matrix.os }}" == "windows-latest" ]; then
+            cp dist/neuro_gym.exe artifacts/neuro_gym-windows-${{ matrix.python-version }}.exe
+          fi
+        shell: bash
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: neuro_gym-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: artifacts/
+
+  create-release:
+    needs: [build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Download all artifacts from build job
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/  # скачиваем все артефакты в папку artifacts
+
+      - name: Create archive
+        run: |
+          cd artifacts
+          zip -r ../neuro_gym-${{ needs.build.outputs.version_app }}.zip .
+          cd ..
+      
+      - name: Create Release
+        run: |
+          export LANG=ru_RU.UTF-8
+          DESC_COMMIT=$(git show --format=%B --no-patch ${{ github.sha }})
+
+          gh release create "v${{ needs.build.outputs.version_app }}" \
+            neuro_gym-${{ needs.build.outputs.version_app }}.zip \
+          --title "v${{ needs.build.outputs.version_app }}" \
+          --notes "${DESC_COMMIT}" \
+          --target ${{ github.sha }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

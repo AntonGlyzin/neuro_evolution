@@ -5,11 +5,11 @@ from deap import creator
 from deap import tools
 import gymnasium as gym
 from typing import List, Tuple
-
+import importlib
 from neuro_gym.environ import Environ
 from neuro_gym.agent import NetworkAgent
 
-import settings
+settings = importlib.import_module('settings')
 
 
 class GeneticEvolution:
@@ -159,10 +159,16 @@ class GeneticEvolution:
                 action, confidence = self._model.predict(observation, True)
                 observation, reward, terminated, truncated, _ = self._game.step(action)
                 episode_reward += reward
+                env_step_reward = self._individ.step_reward(observation)
+                if env_step_reward:
+                    episode_reward += env_step_reward
                 if not self._individ.calc_confidence:
                     continue
                 episode_confidence += confidence
                 steps += 1
+            env_episode_reward = self._individ.episode_reward(observation)
+            if env_episode_reward:
+                episode_reward += env_episode_reward
             step_confidence = (
                 episode_confidence / steps 
                 if steps else 0

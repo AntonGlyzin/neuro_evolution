@@ -1,13 +1,26 @@
 from __future__ import annotations
-import environs # Добавление в текущее пространиство окружающих сред.
 import numpy as np
 import time
 from pathlib import Path
+import sys
+import importlib
 import gymnasium as gym
 from typing import List, Optional
+import matplotlib
+matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
+
+if getattr(sys, 'frozen', False):
+    base_path = Path(sys.executable).parent
+else:
+    base_path = Path(__file__).parent
+if str(base_path) not in sys.path:
+    sys.path.insert(0, str(base_path))
+
+importlib.import_module('environs')
+settings = importlib.import_module('settings')
+
 from neuro_gym import NetworkAgent, GeneticEvolution, Environs, Environ
-from settings import NUMBER_YEARS_ON_GRAPHIC, STATISTIC_DIR
 
 
 class NeuroGym(object):
@@ -56,7 +69,7 @@ class NeuroGym(object):
                 )
                 self._env = Environs.get(env_num-1)
                 self._env.statistic_folder = (
-                    self._env.statistic_folder or STATISTIC_DIR.joinpath(self._env.id)
+                    self._env.statistic_folder or settings.STATISTIC_DIR.joinpath(self._env.id)
                 )
                 if not self._env.statistic_folder.exists():
                     self._env.statistic_folder.mkdir(parents=True, exist_ok=True)
@@ -140,13 +153,13 @@ class NeuroGym(object):
         """ Сохранение статистики. """
         start_index = (
             0
-            if len(self.max_values) <= NUMBER_YEARS_ON_GRAPHIC
-            else -NUMBER_YEARS_ON_GRAPHIC
+            if len(self.max_values) <= settings.NUMBER_YEARS_ON_GRAPHIC
+            else -settings.NUMBER_YEARS_ON_GRAPHIC
         )
         start_ten = (
             0
-            if len(self.max_values) <= NUMBER_YEARS_ON_GRAPHIC
-            else -int(NUMBER_YEARS_ON_GRAPHIC/10)
+            if len(self.max_values) <= settings.NUMBER_YEARS_ON_GRAPHIC
+            else -int(settings.NUMBER_YEARS_ON_GRAPHIC/10)
         )
         np.savez(self._env.statistic_folder / 'evolution',
             max_values = self.max_values[start_index:],
@@ -230,15 +243,19 @@ class NeuroGym(object):
         while not (terminated or truncated):
             action, confidence = self._model.predict(observation, True)
             observation, reward, terminated, truncated, _ = env_gym.step(action)
+            if settings.SHOW_OBSERVATION:
+                print(f'Зона наблюдения на шаге {steps}: <{observation}>')
             time.sleep(.03)
             total_reward += reward
+            steps += 1
             if not self._env.calc_confidence:
                 continue
             steps_confidence += confidence
-            steps += 1
-        if self._env.calc_confidence and (total_reward > 0):
+        if self._env.calc_confidence and steps_confidence and (total_reward > 0):
             step_confidence = steps_confidence / steps if steps else 0
             print(f"Средняя уверенность шага: {step_confidence:.1%}")
+        if settings.SHOW_OBSERVATION:
+            print(f'Зона наблюдения на последнем шаге: <{observation}>')
         print(f"Общая награда: {total_reward:.1f}")
         env_gym.close()
     
