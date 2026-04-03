@@ -55,7 +55,7 @@ jobs:
 
       - name: Build with PyInstaller (using spec file)
         run: |
-          pyinstaller neuro_gym.spec
+          pyinstaller neuro_evolution.spec
         shell: bash
 
       - name: Rename executable for artifact
@@ -71,14 +71,14 @@ jobs:
             cp -r environs/* artifacts/environs/
             fi
           if [ "${{ matrix.os }}" == "windows-latest" ]; then
-            cp dist/neuro_gym.exe artifacts/neuro_gym-windows-${{ matrix.python-version }}.exe
+            cp dist/neuro_evolution.exe artifacts/neuro_evolution-windows-${{ matrix.python-version }}.exe
           fi
         shell: bash
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: neuro_gym-${{ matrix.os }}-py${{ matrix.python-version }}
+          name: neuro_evolution-${{ matrix.os }}-py${{ matrix.python-version }}
           path: artifacts/
 
   create-release:
@@ -100,7 +100,7 @@ jobs:
       - name: Create archive
         run: |
           cd artifacts
-          zip -r ../neuro_gym-${{ needs.build.outputs.version_app }}.zip .
+          zip -r ../neuro_evolution-${{ needs.build.outputs.version_app }}.zip .
           cd ..
       
       - name: Create Release
@@ -109,7 +109,7 @@ jobs:
           DESC_COMMIT=$(git show --format=%B --no-patch ${{ github.sha }})
 
           gh release create "v${{ needs.build.outputs.version_app }}" \
-            neuro_gym-${{ needs.build.outputs.version_app }}.zip \
+            neuro_evolution-${{ needs.build.outputs.version_app }}.zip \
           --title "v${{ needs.build.outputs.version_app }}" \
           --notes "${DESC_COMMIT}" \
           --target ${{ github.sha }}
