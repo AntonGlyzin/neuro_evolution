@@ -4,7 +4,7 @@ import numpy as np
 from neuro_gym.environ import Environ, Complexity
 
 
-class LunarLander(Environ):
+class BipedalWalker(Environ):
     
     @property
     def id(self) -> str:

@@ -1,12 +1,28 @@
 from pathlib import Path
+import logging
 
+
+# Максимальное количество воркеров в одном сервисе для потоковых задач.
+MAX_WORKERS = 30
+
+# Уровень логирования в приложение.
+LOG_LEVEL = logging.DEBUG
+
+# Указывает на корневую директорию при запуске приложения.
 ROOT_DIR = Path(__file__).parent
 
 # Директория для сохранения статистики и настройек
 STATISTIC_DIR = ROOT_DIR / 'statistic'
 
+# Директория с логами.
+LOG_DIR = ROOT_DIR / 'logs'
+# Размер одного файла в байтах
+LOG_FILE_SIZE = 30*1024*1024 # 30 MB
+# Количество старых лог файлов
+LOG_FILES_BACKUP = 7
+
 # Количество лет отображаемых на графике.
-NUMBER_YEARS_ON_GRAPHIC = 100
+NUMBER_YEARS_ON_GRAPHIC = 700
 
 # Количество поколений в одном десятилетие.
 MAX_GENERATIONS = 10

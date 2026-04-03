@@ -32,7 +32,7 @@ class NetworkAgent(nn.Module):
             nn.Dropout(0.2),
             nn.Linear(hidden_size // 2, self._environ.number_output_neurons)
         )
-        self._init_weights()
+        self.init_weights()
         self.eval()
     
     @property
@@ -44,7 +44,7 @@ class NetworkAgent(nn.Module):
         """        
         return sum(p.numel() for p in self.parameters())
     
-    def _init_weights(self):
+    def init_weights(self):
         """ Инициализация весов с использованием Xavier. """
         for module in self._network:
             if isinstance(module, nn.Linear):

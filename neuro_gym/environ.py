@@ -3,14 +3,20 @@ import torch
 import numpy as np
 from abc import abstractmethod
 from enum import IntEnum
-from pathlib import Path
 from typing import Union, Dict, Any, Optional
 from gymnasium import Env
 import gymnasium as gym
+import importlib
+
+settings = importlib.import_module('settings')
 
 
 class Complexity(IntEnum):
-    """ Сложность окружающей среды. """
+    """Сложность окружающей среды. 
+    Чем больше признаков поступает в нейронную сеть, тем больше 
+    должна выставляться сложность.
+    
+    """
     
     LOW = 2
     MEDIUM = 4
@@ -18,7 +24,7 @@ class Complexity(IntEnum):
 
 
 class Environs(object):
-    """ Окружающая среда. """
+    """ Список настроеек виртуальных окружений. """
     
     elements: Dict[str, Environ] = {}
     
@@ -46,11 +52,34 @@ class Environs(object):
         return iter(cls.elements.values())
 
 
-class Environ(object):
+class EnvGame(object):
+    """ Виртуальное окружение для агента. """
     
-    def __init__(self):
+    def __init__(self, env: Environ, **extra_params):
         self._game: Optional[Env] = None
-        self.statistic_folder: Optional[Path] = None
+        self._env = env
+        self._extra_params = extra_params
+    
+    def game(self) -> Env:
+        if self._game:
+            self._game.close()
+        self._game = gym.make(**self._env.env_params, **self._extra_params)
+        self._game.reset()
+        return self._game
+    
+    def close(self):
+        self._game.close()
+        self._game = None
+    
+    def __enter__(self):
+        return self.game()
+    
+    def __exit__(self, exc_type, exc, tb):
+        self.close()
+
+
+class Environ(object):
+    """ Базовые настройки виртуального окружения. """
     
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -58,18 +87,12 @@ class Environ(object):
         if obj.id:
             Environs.elements[obj.id] = obj
     
-    def game(self) -> Env:
-        if self._game:
-            self._game.close()
-        self._game = gym.make(**self.env_params)
-        self._game.reset()
-        return self._game
-    
-    def __enter__(self):
-        return self.game()
-    
-    def __exit__(self, exc_type, exc, tb):
-        self._game.close()
+    @property
+    def statistic_folder(self) -> str:
+        folder = (settings.STATISTIC_DIR / self.id)
+        if not folder.exists():
+            folder.mkdir(parents=True, exist_ok=True)
+        return settings.STATISTIC_DIR / self.id
     
     @property
     @abstractmethod
