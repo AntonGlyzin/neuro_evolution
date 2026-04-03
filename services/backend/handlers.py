@@ -56,7 +56,7 @@ def run_train(service: Backend, message: RunTrainAgent):
             for i in gen_alg.best_individuals()
         ]
         data = RunTrainAgent(response={
-            'progress_train': fill_bar,
+            'progress_train': int(fill_bar),
             'max_values': gen_alg.max_values.copy(),
             'mean_values': gen_alg.mean_values.copy(),
             'min_values': gen_alg.min_values.copy(),
