@@ -54,10 +54,10 @@ class SimpleBase(Environ):
     def update_vector(self, output_vector: Union[np.ndarray, torch.Tensor]) -> Any: 
         """Преобразует выходной вектор из нейросети для метода `action` окружения.
 
-        Args:
+        Параметры:
             output_vector (Union[np.ndarray, torch.Tensor]): Выходной вектор после нейросети.
 
-        Returns:
+        Возвращает:
             Any: Данные для передачи в `action`.
         """        
         ...
@@ -65,10 +65,10 @@ class SimpleBase(Environ):
     def step_reward(self, observation: np.ndarray) -> Optional[float]: 
         """Выдаваемая награда за каждый шаг в одном эпизоде игры.
 
-        Args:
+        Параметры:
             observation (np.ndarray): Зона наблюдения на каждом шаге.
 
-        Returns:
+        Возвращает:
             Optional[float]: Награда или пустота.
         """        
         ...
@@ -76,10 +76,10 @@ class SimpleBase(Environ):
     def episode_reward(self, observation: np.ndarray) -> Optional[float]: 
         """Выдаваемая награда за эпизод игры.
 
-        Args:
+        Параметры:
             observation (np.ndarray): Зона наблюдения на последнем шаге.
 
-        Returns:
+        Возвращает:
             Optional[float]: Награда или пустота.
         """        
         ...
