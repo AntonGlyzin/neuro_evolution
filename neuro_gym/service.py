@@ -5,10 +5,12 @@ import inspect
 import uuid
 import time
 import re
+import os
+import sys
 import asyncio
 from enum import Enum
 from abc import abstractmethod
-from typing import Dict, Type, Any, Optional, List, Callable, Tuple
+from typing import Dict, Type, Any, Optional, List, Callable, Tuple, Type
 from logging.handlers import QueueHandler, RotatingFileHandler
 from multiprocessing import Process, Queue, Event, synchronize, Manager
 from threading import Thread
@@ -196,6 +198,23 @@ class LoggerListener(Thread):
         self._log_queue.put(None)
 
 
+class RouterTasks(object):
+    
+    tasks: Dict[Type[Command], Callable] = {}
+    
+    @classmethod
+    def get(cls, cmd: Command) -> Optional[Callable]:
+        return cls.tasks.get(cmd.__class__.__name__)
+    
+    @classmethod
+    def add(cls, cls_cmd: Type[Command], func: Callable):
+        cls.tasks[cls_cmd.__name__] = func
+    
+    @classmethod
+    def delete(cls, cls_cmd: Type[Command]):
+        del cls.tasks[cls_cmd.__name__]
+
+
 class RootService(object):
     """ Главный сервис для управления подпроцессами. """
     
@@ -213,26 +232,63 @@ class RootService(object):
         self._mails: Dict[str, Queue] = self._manager.dict()
         self._run_root = self._manager.Event()
         self._logger_listener = LoggerListener(self._log_queue)
+        self._th_handle_cpu_task = Thread(target=self._handle_cpu_task, daemon=True, name='handle_cpu_task')
+        self._queue_cpu_command = self._manager.Queue()
+        self._cpu_tasks: List[Process] = []
+        self.logger: logging.Logger = None
+    
+    def _configurer_queue_logger(self):
+        """ Настройка логера для главного сервиса. """
+        self.logger = logging.getLogger()
+        self.logger.setLevel(settings.LOG_LEVEL)
+        queue_handler = QueueHandler(self._log_queue)
+        queue_handler.addFilter(WorkerFilter(self.__class__.__name__))
+        self.logger.addHandler(queue_handler)
+    
+    def _handle_cpu_task(self):
+        while True:
+            try:
+                cmd = self._queue_cpu_command.get()
+                if cmd is None:
+                    break
+                logger.debug('Received cpu task: {}'.format(cmd))
+                func = RouterTasks.get(cmd)
+                if not func:
+                    continue
+                for i, task in enumerate(list(self._cpu_tasks)):
+                    if not task.is_alive():
+                        self._cpu_tasks.pop(i)
+                proc = Process(target=func, args=[cmd, *cmd.params.args], daemon=True)
+                proc.start()
+                self._cpu_tasks.append(proc)
+            except Exception as e:
+                logger.error('{}: {}'.format(self.__class__.__name__, e))
     
     def send_to(self, service: str, data: Any):
         """Отправляет данные в сервис.
 
         Args:
-            service (str): Название сервиса.
+            service (str): Название сервиса отправления.
             data (Any): Данные.
         """  
+        if isinstance(data, Command):
+            data.sender = self.__class__.__name__
+            data.recipient = service
         self._mails[service].put(data)
     
     def start_services(self):
         """ Запуск всех сервисов. """
         self._run_root.set()
+        self._configurer_queue_logger()
         self._logger_listener.start()
+        self._th_handle_cpu_task.start()
         for key in self.services.keys():
             self._mails[key] = self._manager.Queue()
         for key, service in self.services.items():
             self._services[key] = service()
             self._services[key].queue = self._manager.Queue()
             self._services[key]._mails = self._mails
+            self._services[key]._queue_cpu_command = self._queue_cpu_command
             self._services[key]._log_queue = self._log_queue
             self._services[key]._common_queue = self._mails[key]
             self._services[key]._run_root = self._run_root
@@ -251,6 +307,8 @@ class RootService(object):
             if service._run_service.is_set():
                 continue
             service.close_service()
+        self._queue_cpu_command.put(None)
+        self._cpu_tasks.clear()
 
 
 class ServiceBase(Process):
@@ -281,6 +339,8 @@ class ServiceBase(Process):
         self._executor: Optional[ThreadPoolExecutor] = None
         self._run_service: Optional[synchronize.Event] = None
         self._run_root: Optional[synchronize.Event] = None
+        self._queue_cpu_command: Optional[Queue] = None
+        self._futures = []
         super().__init__(name=self.__class__.__name__, daemon=True, *args, **kwargs)
     
     @classmethod
@@ -333,11 +393,25 @@ class ServiceBase(Process):
     def service_id(cls) -> str:
         return cls.__name__
     
+    @property
+    def mails(self):
+        return self._mails
+    
+    def run_cpu_command(self, cmd: Command):
+        """Запуск команды для ЦПУ.
+
+        Args:
+            cmd (Command): Команда для ЦПУ
+        """        
+        cmd.sender = self.service_id()
+        cmd.recipient = RootService.__name__
+        self._queue_cpu_command.put(cmd)
+    
     def send_to(self, service: str, data: Any):
         """Отправляет данные в сервис.
 
         Args:
-            service (str): Название сервиса.
+            service (str): Название сервиса отправления.
             data (Any): Данные.
         """
         if isinstance(data, Command):
@@ -353,10 +427,15 @@ class ServiceBase(Process):
             max_workers=self.MAX_WORKERS,
             thread_name_prefix=self.__class__.__name__
         )
-        self._executor.submit(self._run_loop)
-        self._executor.submit(self._handle_command)
+        self._futures.append(
+                self._executor.submit(self._run_loop)
+            )
+        self._futures.append(
+                self._executor.submit(self._handle_command)
+            )
         self.run_service()
         self.wait()
+        self._futures.clear()
     
     def close_service(self):
         """ Завершение сервиса. """
@@ -364,9 +443,10 @@ class ServiceBase(Process):
             self._loop.call_soon_threadsafe(self._loop.stop)
         except Exception:
             pass
-        self._executor.shutdown(wait=False, cancel_futures=True)
         self._run_service.set()
+        self._executor.shutdown(wait=False, cancel_futures=True)
         self._common_queue.put(None)
+        time.slee(0.1)
         self.terminate()
     
     def close_all_services(self):

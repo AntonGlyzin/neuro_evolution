@@ -127,7 +127,7 @@ class Agent(object):
         plt.grid(True, alpha=0.3)
         plt.suptitle('Нейроэволюция моделей', fontsize=16)
         plt.tight_layout()
-        plt.show(block=True)
+        plt.show()
     
     def run_test_agent(self):
         """ Тестовый запуск агента в виртуальной среде. """

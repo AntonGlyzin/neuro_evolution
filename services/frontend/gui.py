@@ -61,9 +61,10 @@ class ActivateTrain(BaseCommandConsole):
         request = RunTrainAgent(params={
                 'env': self.frame.current_agent.env,
                 'num_ten': number,
-                'len_progress': self.frame.LENGTH_PROGRESS_BAR
+                'len_progress': self.frame.LENGTH_PROGRESS_BAR,
+                'args': [self.frame.service.mails]
             }).set_is_request()
-        self.frame.service.send_to(self.frame.service.backend_id, request)
+        self.frame.service.run_cpu_command(request)
         self.frame.current_agent.is_now_train = True
         self.frame.current_agent.progress_train = 1
         self.frame.progress_bar.SetValue(1)
@@ -92,6 +93,7 @@ class SelectNumberModel(BaseCommandConsole):
         if ((self.frame.current_agent.progress_train == self.frame.LENGTH_PROGRESS_BAR)
             and not self.frame.current_agent.is_now_train):
             self.frame.progress_bar.SetValue(0)
+            self.frame.current_agent.progress_train = 0
         self.frame.run_cmd_console(ShowActionsEnviron)
 
 
@@ -132,7 +134,7 @@ class RunTestAgent(BaseCommandConsole):
     
     def __init__(self, frame: GUIFrame):
         super().__init__(frame)
-        self.frame.current_agent.run_test_agent()
+        wx.CallAfter(self.frame.current_agent.run_test_agent)
         self.goto = ShowActionsEnviron
     
     def execute(self, number: int): ...
@@ -143,7 +145,7 @@ class ShowEvolution(BaseCommandConsole):
     
     def __init__(self, frame: GUIFrame):
         super().__init__(frame)
-        self.frame.current_agent.show_evolution()
+        wx.CallAfter(self.frame.current_agent.show_evolution)
         self.goto = ShowActionsEnviron
     
     def execute(self, number: int): ...
@@ -196,7 +198,6 @@ class ListEnvirons(BaseCommandConsole):
     def execute(self, number: int):
         env = Environs.get(number-1)
         self.frame.current_agent = self.frame.agents[env.id]
-        self.frame.current_agent.load()
         self.frame.progress_bar.SetValue(self.frame.current_agent.progress_train)
         if ((self.frame.current_agent.progress_train == self.frame.LENGTH_PROGRESS_BAR)
             and not self.frame.current_agent.is_now_train):
@@ -204,8 +205,9 @@ class ListEnvirons(BaseCommandConsole):
             self.frame.print_console('\nВыберите модель для сохранения')
             self.frame.progress_bar.SetValue(self.frame.LENGTH_PROGRESS_BAR)
             self.frame.run_cmd_console(SelectSaveModel)
-            self.frame.current_agent.show_evolution()
+            wx.CallAfter(self.frame.current_agent.show_evolution)
             return
+        self.frame.current_agent.load()
         self.frame.run_cmd_console(ShowActionsEnviron)
 
 
@@ -224,6 +226,7 @@ class GUIFrame(wx.Frame):
             style=wx.CAPTION | wx.CLOSE_BOX | wx.SYSTEM_MENU | wx.TAB_TRAVERSAL
         )
         self.service = service
+        self.Bind(wx.EVT_CLOSE, self._on_close)
         # Запрет изменения размера
         self.SetSizeHints(700, 500, 700, 500)
         # Центрируем окно на экране
@@ -368,6 +371,15 @@ class GUIFrame(wx.Frame):
     def _back_to_environs(self, event):
         """ Возвращает консоль к списку окружений. """
         self.run_cmd_console(ListEnvirons)
+    
+    def _on_close(self, event):
+        """ Обработчик закрытия окна. """
+        self.service.close_all_services()
+        event.Skip()
+    
+    def show_evolution(self):
+        if self.current_agent:
+            wx.CallAfter(self.current_agent.show_evolution)
     
     def show_toast(self, text: str):
         notification = wx.adv.NotificationMessage(

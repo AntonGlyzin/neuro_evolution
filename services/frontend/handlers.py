@@ -22,7 +22,7 @@ def progress_train(service: Frontend, message: RunTrainAgent):
             service.frame.print_console('\nВыберите модель для сохранения')
             service.frame.progress_bar.SetValue(service.frame.LENGTH_PROGRESS_BAR)
             service.frame.run_cmd_console(SelectSaveModel)
-            service.frame.current_agent.show_evolution()
+            service.frame.show_evolution()
     elif message.status == StatusCommand.PROCESSING:
         agent: Agent = service.frame.agents[message.params.env.id]
         agent.is_now_train = True

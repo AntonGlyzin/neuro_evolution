@@ -1,9 +1,10 @@
+import os
 from pathlib import Path
 import logging
 
 
 # Максимальное количество воркеров в одном сервисе для потоковых задач.
-MAX_WORKERS = 30
+MAX_WORKERS = os.cpu_count() * 2
 
 # Уровень логирования в приложение.
 LOG_LEVEL = logging.DEBUG

@@ -22,12 +22,13 @@ class Frontend(ServiceBase):
     def run_service(self):
         import logging
         logging.getLogger('matplotlib').setLevel(logging.INFO)
+        logging.getLogger('PIL').setLevel(logging.INFO)
+        logging.getLogger('PIL.PngImagePlugin').setLevel(logging.INFO)
         import matplotlib
         matplotlib.use('TkAgg')
         self.frame = GUIFrame(self)
         async_request = AsyncTestCommand().set_is_request()
-        thread_request = ThreadTestCommand().set_is_request()
         self.send_to(self.backend_id, async_request)
+        thread_request = ThreadTestCommand().set_is_request()
         self.send_to(self.backend_id, thread_request)
         self.frame.start()
-        self.close_all_services()

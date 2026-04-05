@@ -1,6 +1,6 @@
 from __future__ import annotations
-from pydantic import BaseModel
-from typing import Optional, List
+from pydantic import BaseModel, Field
+from typing import Optional, List, Any, Dict
 from neuro_gym.service import Command
 
 
@@ -17,6 +17,8 @@ class RunTrainAgent(Command):
         env: object
         num_ten: int
         len_progress: int
+        args: List[Any] = Field(default_factory=list)
+        kwargs: Dict = Field(default_factory=dict)
     
     class Response(BaseModel):
         progress_train: int
