@@ -3,7 +3,10 @@ import torch
 import torch.nn as nn
 import numpy as np
 import torch.nn.functional as F
-from typing import Union, Tuple, List, Any
+from typing import Union, Tuple, List, Any, Optional
+import onnxruntime as ort
+import tempfile
+import os
 
 from neuro_gym.environ import Environ
 
@@ -20,20 +23,18 @@ class NetworkAgent(nn.Module):
         super(NetworkAgent, self).__init__()
         self.age_gen = 0
         self.number_model = 0
+        self._ort_session: Optional[ort.InferenceSession] = None
         self._environ = environ
         hidden_size = self._hidden_size()
         self._path_agent = self._environ.statistic_folder / 'agent'
         self._network = nn.Sequential(
             nn.Linear(self._environ.number_input_neurons, hidden_size),
             nn.ReLU(),
-            nn.Dropout(0.2),
             nn.Linear(hidden_size, hidden_size // 2),
             nn.ReLU(),
-            nn.Dropout(0.2),
             nn.Linear(hidden_size // 2, self._environ.number_output_neurons)
         )
         self.init_weights()
-        self.eval()
     
     @property
     def count_weights(self) -> int:
@@ -43,6 +44,10 @@ class NetworkAgent(nn.Module):
             int: Количество весов.
         """        
         return sum(p.numel() for p in self.parameters())
+    
+    def clear_onnx(self):
+        """ Очищение ONNX сессии. """        
+        self._ort_session = None
     
     def init_weights(self):
         """ Инициализация весов с использованием Xavier. """
@@ -63,7 +68,7 @@ class NetworkAgent(nn.Module):
 
         Returns:
             Union[Any, Tuple]: Предсказание и уверенность.
-        """        
+        """
         tensor_x = self._prepare_input(x, ensure_batch)
         with torch.no_grad():
             outputs = self._network(tensor_x)
@@ -73,6 +78,35 @@ class NetworkAgent(nn.Module):
         if not confidence:
             return res
         return res, F.softmax(outputs, dim=-1).max()
+    
+    def predict_onnx(self, x: Union[np.ndarray, list, torch.Tensor], 
+                confidence: bool = False,
+                ensure_batch: bool = False) -> Union[Any, Tuple]:
+        """Предсказание через ONNX Runtime.
+
+        Args:
+            x (Union[np.ndarray, list, torch.Tensor]): Вход нейронной сети.
+            confidence (bool, optional): Выдавать ли уверенность ответа.
+            ensure_batch (bool, optional): Пакетная ли обработка.
+
+        Returns:
+            Union[Any, Tuple]: Предсказание и уверенность.
+        """
+        self.eval()
+        tensor_x = self._prepare_input(x, ensure_batch)
+        if tensor_x.dim() == 1:
+            tensor_x = tensor_x.unsqueeze(0)
+        input_numpy = tensor_x.numpy() # ONNX Runtime работает с numpy
+        if self._ort_session is None:
+            self._create_session_onnx()
+        outputs = self._ort_session.run(['output'], {'input': input_numpy})[0] # Инференс
+        outputs_tensor = torch.from_numpy(outputs)
+        if outputs_tensor.dim() == 2:
+            outputs_tensor = outputs_tensor.squeeze()
+        res = self._environ.update_vector(outputs_tensor)
+        if not confidence:
+            return res
+        return res, F.softmax(outputs_tensor, dim=-1).max()
     
     def get_weights_as_vector(self) -> np.ndarray:
         """Получение весов модели.
@@ -114,16 +148,47 @@ class NetworkAgent(nn.Module):
             'number_model': self.number_model
         }
         torch.save(checkpoint, self._path_agent)
+        self._create_session_onnx()
     
     def load_modal(self):
         """ Загрузить модель из файла. """
+        self._create_session_onnx()
         if not self._path_agent.exists():
             return None
         checkpoint = torch.load(self._path_agent)
         self.load_state_dict(checkpoint['model'])
         self.age_gen = checkpoint['age_gen']
         self.number_model = checkpoint['number_model']
-        self.eval()
+    
+    def _create_session_onnx(self) -> ort.InferenceSession:
+        """Создание инференс сессии.
+
+        Returns:
+            ort.InferenceSession: Сессия.
+        """        
+        example_input = torch.randn(1, self._environ.number_input_neurons)
+        with tempfile.NamedTemporaryFile(suffix='.onnx', delete=False) as f:
+            onnx_path = f.name
+        torch.onnx.export(
+            self._network,                    # модель
+            example_input,                    # пример входа
+            onnx_path,                        # путь сохранения
+            input_names=['input'],            # имя входа
+            output_names=['output'],          # имя выхода
+            dynamic_axes={
+                'input': {0: 'batch_size'},   # динамический batch
+                'output': {0: 'batch_size'}
+            },
+            opset_version=14,                  # стабильная версия ONNX
+            dynamo=False
+        )
+        self._ort_session = ort.InferenceSession(
+            onnx_path,
+            providers=['CPUExecutionProvider']  # для CPU
+            # providers=['CUDAExecutionProvider', 'CPUExecutionProvider'] # для GPU
+        )
+        os.unlink(onnx_path)
+        return self._ort_session
     
     def _prepare_input(self, x: Union[np.ndarray, list, torch.Tensor], 
                     ensure_batch: bool = False) -> torch.Tensor:

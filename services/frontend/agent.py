@@ -38,6 +38,7 @@ class Agent(object):
     def clear(self):
         """ Очищение данных. """
         self.model.init_weights()
+        self.model.clear_onnx()
         self.progress_train = 0
         self.age_population = 0
         self.max_values = []
@@ -139,7 +140,7 @@ class Agent(object):
             steps_confidence = 0
             steps = 0
             while not (terminated or truncated):
-                action, confidence = self.model.predict(observation, True)
+                action, confidence = self.model.predict_onnx(observation, True)
                 observation, reward, terminated, truncated, _ = game.step(action)
                 if settings.SHOW_OBSERVATION:
                     self.print_console('\nЗона наблюдения на шаге {}: <{}>'.format(steps, observation))
